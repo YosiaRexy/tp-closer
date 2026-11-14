@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#2563eb">
+<meta name="description" content="Auto close posisi 100% saat EMA 3 cross EMA 8">
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TP Closer">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+*{font-family:Inter,system-ui,sans-serif}
+.card{ @apply bg-white rounded-xl border border-slate-200 shadow-sm }
+.badge{ @apply px-2 py-0.5 rounded-full text-xs font-semibold }
+.input{ @apply w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none }
+.btn{ @apply px-4 py-2 rounded-lg text-sm font-semibold transition active:scale-95 disabled:opacity-50 }
+.btn-primary{ @apply bg-blue-600 text-white hover:bg-blue-700 }
+.btn-ghost{ @apply bg-slate-100 hover:bg-slate-200 }
+.nav-active{ @apply bg-blue-600 text-white !important }
+</style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+<!-- APP VIEW (single-user, tanpa login) -->
+<div id="app-view" class="min-h-screen">
+  <!-- TOPBAR -->
+  <header class="sticky top-0 z-30 bg-white border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white"><i class="fa-solid fa-bolt"></i></div>
+        <span class="font-bold">TP Dashboard</span>
+        <span class="hidden sm:inline text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 rounded-full"><span class="w-2 h-2 bg-emerald-500 rounded-full inline-block animate-pulse mr-1"></span>Live</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="install-btn" onclick="installApp()" class="hidden btn btn-primary text-xs"><i class="fa-solid fa-download mr-1"></i> Install App</button>
+        <span id="worker-badge" class="hidden sm:inline text-xs bg-slate-100 border px-2 py-1 rounded-full"><span class="w-2 h-2 bg-slate-400 rounded-full inline-block mr-1"></span>checking...</span>
+        <span class="hidden sm:inline text-xs bg-slate-100 border px-2 py-1 rounded-full">Single-user</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6">
+    <!-- SIDEBAR -->
+    <nav class="lg:w-52 shrink-0 flex lg:flex-col gap-2 overflow-auto">
+      <button onclick="go('dashboard')" data-nav="dashboard" class="nav-btn btn btn-ghost text-left whitespace-nowrap nav-active"><i class="fa-solid fa-table-columns w-5"></i> Dashboard</button>
+      <button onclick="go('brokers')" data-nav="brokers" class="nav-btn btn btn-ghost text-left whitespace-nowrap"><i class="fa-solid fa-plug w-5"></i> Brokers</button>
+      <button onclick="go('rules')" data-nav="rules" class="nav-btn btn btn-ghost text-left whitespace-nowrap"><i class="fa-solid fa-sliders w-5"></i> TP Rules</button>
+      <button onclick="go('positions')" data-nav="positions" class="nav-btn btn btn-ghost text-left whitespace-nowrap"><i class="fa-solid fa-briefcase w-5"></i> Positions</button>
+      <button onclick="go('history')" data-nav="history" class="nav-btn btn btn-ghost text-left whitespace-nowrap"><i class="fa-solid fa-clock-rotate-left w-5"></i> History</button>
+    </nav>
+
+    <!-- CONTENT -->
+    <main class="flex-1 min-w-0 space-y-6">
+
+      <!-- DASHBOARD -->
+      <section id="sec-dashboard" class="space-y-4">
+        <div class="card p-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0">
+          <h2 class="font-bold text-lg">Cara pakai (V1)</h2>
+          <ol class="text-sm text-blue-50 list-decimal ml-5 mt-2 space-y-1">
+            <li>Buka posisi <b>manual</b> di Bybit / MT5 (XM)</li>
+            <li>Tambah Broker API di menu <b>Brokers</b></li>
+            <li>Buat Rule di <b>TP Rules</b> — centang indikator (RSI, MA Cross, Williams, BB, StochRSI, MACD, EMA)</li>
+            <li>Di <b>Positions</b> klik <b>Sync</b> → attach Rule → bot otomatis set/modify TP di broker</li>
+          </ol>
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div class="card p-4"><div class="text-xs text-slate-500">Brokers</div><div id="stat-brokers" class="text-2xl font-bold">0</div></div>
+          <div class="card p-4"><div class="text-xs text-slate-500">Rules Aktif</div><div id="stat-rules" class="text-2xl font-bold">0</div></div>
+          <div class="card p-4"><div class="text-xs text-slate-500">Positions</div><div id="stat-pos" class="text-2xl font-bold">0</div></div>
+          <div class="card p-4"><div class="text-xs text-slate-500">Dimonitor</div><div id="stat-mon" class="text-2xl font-bold">0</div></div>
+        </div>
+        <div class="card p-4">
+          <div class="flex justify-between items-center mb-3"><h3 class="font-semibold">Posisi Terbaru</h3><button onclick="go('positions')" class="text-sm text-blue-600 hover:underline">Lihat semua →</button></div>
+          <div id="dash-positions" class="text-sm text-slate-500">Belum ada posisi. Klik Sync di menu Positions.</div>
+        </div>
+      </section>
+
+      <!-- BROKERS -->
+      <section id="sec-brokers" class="hidden space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="font-bold text-lg">Brokers</h2>
+          <button onclick="openBrokerModal()" class="btn btn-primary text-sm"><i class="fa-solid fa-plus mr-1"></i> Tambah Broker</button>
+        </div>
+        <div class="card p-4 text-sm bg-amber-50 border-amber-200">
+          <b>Bybit:</b> bybit.com → Profile → API → Create New Key → System Generated → beri <b>Read-Write</b> (jangan centang Withdraw) → simpan <b>API Key + Secret</b>. Untuk VPS Oracle isi IP di whitelist. MT5 XM: pakai login/nomor akun + password + server (cth: XMGlobal-MT5).
+        </div>
+        <div id="broker-list" class="grid gap-3"></div>
+      </section>
+
+      <!-- RULES -->
+      <section id="sec-rules" class="hidden space-y-4">
+        <div class="flex justify-between items-center">
+          <h2 class="font-bold text-lg">TP Rules</h2>
+          <button onclick="openRuleModal()" class="btn btn-primary text-sm"><i class="fa-solid fa-plus mr-1"></i> Buat Rule</button>
+        </div>
+        <div id="rule-list" class="grid gap-3"></div>
+      </section>
+
+      <!-- POSITIONS -->
+      <section id="sec-positions" class="hidden space-y-4">
+        <div class="flex flex-wrap gap-2 justify-between items-center">
+          <h2 class="font-bold text-lg">Positions</h2>
+          <div class="flex gap-2">
+            <select id="pos-filter" onchange="loadPositions()" class="input !w-auto py-1.5">
+              <option value="">Semua status</option><option value="monitoring">Monitoring</option><option value="tp_hit">TP Hit</option><option value="closed">Closed</option>
+            </select>
+            <button onclick="syncPositions()" id="btn-sync" class="btn btn-primary text-sm"><i class="fa-solid fa-rotate mr-1"></i> Sync</button>
+          </div>
+        </div>
+        <div id="position-list" class="grid md:grid-cols-2 gap-3"></div>
+      </section>
+
+      <!-- HISTORY -->
+      <section id="sec-history" class="hidden space-y-4">
+        <h2 class="font-bold text-lg">History TP Hit</h2>
+        <div class="card overflow-hidden">
+          <div class="overflow-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-slate-50 text-slate-500"><tr><th class="px-3 py-2 text-left">Waktu</th><th class="px-3 py-2">Symbol</th><th class="px-3 py-2">TP</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Trigger</th></tr></thead>
+              <tbody id="log-rows"></tbody>
+            </table>
+          </div>
+          <div id="log-empty" class="p-8 text-center text-slate-400 hidden">Belum ada eksekusi</div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- BROKER MODAL -->
+<div id="broker-modal" class="hidden fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
+  <div class="card w-full max-w-lg p-6 max-h-[90vh] overflow-auto">
+    <div class="flex justify-between items-center mb-4"><h3 class="font-bold">Tambah Broker</h3><button onclick="closeBrokerModal()" class="btn btn-ghost"><i class="fa-solid fa-xmark"></i></button></div>
+    <form onsubmit="saveBroker(event)" class="space-y-3">
+      <label class="text-sm font-medium">Tipe Broker</label>
+      <select id="b-type" onchange="renderBrokerFields()" class="input">
+        <option value="bybit">Bybit (Crypto) — ccxt</option>
+        <option value="metaapi">MetaApi (MT5: Exness/XM) — cloud</option>
+      </select>
+      <input id="b-name" class="input" placeholder="Nama koneksi, cth: Bybit Mainnet" required>
+      <label class="flex gap-2 items-center text-sm"><input id="b-testnet" type="checkbox" checked> Testnet / Demo</label>
+      <div id="b-fields" class="space-y-3"></div>
+      <div id="b-test-result" class="hidden text-sm px-3 py-2 rounded-lg"></div>
+      <div class="flex gap-2 justify-end pt-2">
+        <button type="button" onclick="closeBrokerModal()" class="btn btn-ghost">Batal</button>
+        <button type="button" onclick="testBroker()" class="btn btn-ghost">Test Koneksi</button>
+        <button type="submit" class="btn btn-primary">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- RULE MODAL - INDIKATOR CHECKBOX -->
+<div id="rule-modal" class="hidden fixed inset-0 z-40 bg-black/50 flex items-start justify-center p-4 overflow-auto">
+  <div class="card w-full max-w-3xl p-6 my-6">
+    <div class="flex justify-between items-center mb-4"><h3 class="font-bold text-lg">Buat TP Rule — Centang Indikator</h3><button onclick="closeRuleModal()" class="btn btn-ghost"><i class="fa-solid fa-xmark"></i></button></div>
+    <form onsubmit="saveRule(event)" class="space-y-4">
+      <input id="r-name" class="input" placeholder="Nama rule, cth: Scalp RSI + BB" required>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <label class="text-sm">Logic<select id="r-logic" class="input mt-1"><option value="ANY">ANY (salah satu trigger = TP)</option><option value="ALL">ALL (semua harus trigger)</option></select></label>
+        <label class="text-sm">Timeframe (bisa otak-atik)<select id="r-tf" class="input mt-1"><option value="1m">1m</option><option value="3m">3m</option><option value="5m">5m</option><option value="15m" selected>15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="2h">2h</option><option value="4h">4h</option><option value="6h">6h</option><option value="12h">12h</option><option value="1d">1d</option></select></label>
+        <label class="text-sm">TP Type<select id="r-tp" class="input mt-1"><option value="limit">Limit</option><option value="market">Market</option></select></label>
+      </div>
+      <div>
+        <div class="text-sm font-medium mb-1">Symbols (pilih beberapa)</div>
+        <div id="r-symbols" class="flex flex-wrap gap-1.5"></div>
+      </div>
+      <div>
+        <label class="text-sm font-medium">Trail % (0 = pakai TP indikator)</label>
+        <input id="r-trail" type="number" step="0.1" value="0" class="input mt-1">
+      </div>
+
+      <div class="border rounded-xl p-3 bg-slate-50">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-sm font-semibold">Indikator — centang & atur</span>
+          <button type="button" onclick="addCondition()" class="btn btn-primary text-xs"><i class="fa-solid fa-plus mr-1"></i>Tambah Kondisi</button>
+        </div>
+        <p class="text-xs text-slate-500 mb-3">Contoh kamu: <b>RSI cross bawah 30</b> + <b>MA 9 cross up MA 21</b> + <b>Williams %R cross atas -80</b> + <b>Harga touch BB Lower</b> → otomatis TP.</p>
+        <div id="r-conditions" class="space-y-3"></div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" onclick="closeRuleModal()" class="btn btn-ghost">Batal</button>
+        <button type="submit" class="btn btn-primary">Simpan Rule</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+const API=""; // same origin http://localhost:8000
+let authMode='login';
+let conditions=[];
+const SYMBOLS=['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','EURUSD','GBPUSD','USDJPY','XAUUSD','XAGUSD','US30','US500'];
+const INDICATORS=[
+  {id:'ema_cross',label:'EMA Cross (3/8) ⭐',params:[{k:'fast',d:3},{k:'slow',d:8}],ops:['cross_up','cross_down','cross_above','cross_below']},
+  {id:'rsi',label:'RSI',params:[{k:'length',d:14}],ops:['cross_above','cross_below','>','<']},
+  {id:'ma_cross',label:'MA Cross (9/21)',params:[{k:'fast',d:9},{k:'slow',d:21}],ops:['cross_up','cross_down']},
+  {id:'williams_r',label:'Williams %R',params:[{k:'length',d:14}],ops:['cross_above','cross_below','>','<']},
+  {id:'bb',label:'Bollinger Bands',params:[{k:'length',d:20},{k:'std',d:2}],ops:['touch_upper','touch_lower','price_cross_above','price_cross_below']},
+  {id:'stoch_rsi',label:'Stoch RSI',params:[{k:'length',d:14},{k:'k',d:3},{k:'d',d:3}],ops:['cross_above','cross_below','cross_up','cross_down']},
+  {id:'macd',label:'MACD',params:[{k:'fast',d:12},{k:'slow',d:26},{k:'signal',d:9}],ops:['cross_up','cross_down']},
+  {id:'ema',label:'EMA Single',params:[{k:'length',d:200}],ops:['price_cross_above','price_cross_below']},
+];
+const OP_LABEL={cross_above:'Cross Above',cross_below:'Cross Below',cross_up:'Cross Up',cross_down:'Cross Down',touch_upper:'Touch Upper',touch_lower:'Touch Lower',price_cross_above:'Price Cross Above',price_cross_below:'Price Cross Below','>':'Greater >','<':'Less <'};
+
+async function api(path,opts={}){const r=await fetch(API+'/api'+path,{credentials:'include',headers:{'Content-Type':'application/json',...(opts.headers||{})},...opts}); if(!r.ok){const e=await r.json().catch(()=>({detail:r.statusText}));throw new Error(e.detail||'Error');} return r.json();}
+function go(name){document.querySelectorAll('[data-nav]').forEach(b=>b.classList.remove('nav-active'));document.querySelector(`[data-nav="${name}"]`)?.classList.add('nav-active');['dashboard','brokers','rules','positions','history'].forEach(s=>document.getElementById('sec-'+s).classList.toggle('hidden',s!==name)); if(name==='brokers') loadBrokers(); if(name==='rules') loadRules(); if(name==='positions') loadPositions(); if(name==='history') loadLogs(); if(name==='dashboard') loadAll();}
+async function loadAll(){try{const [b,r,p]=await Promise.all([api('/brokers'),api('/rules'),api('/positions')]);document.getElementById('stat-brokers').textContent=b.length;document.getElementById('stat-rules').textContent=r.filter(x=>x.is_active).length;document.getElementById('stat-pos').textContent=p.length;document.getElementById('stat-mon').textContent=p.filter(x=>x.rule_id).length;document.getElementById('dash-positions').innerHTML=p.length? p.slice(0,3).map(x=>`<div class="flex justify-between py-2 border-b text-sm"><span class="font-mono font-semibold">${x.symbol}</span><span>${x.side}</span><span>${x.entry_price}</span><span class="text-blue-600">${x.rule_name||'no rule'}</span></div>`).join('') : 'Belum ada posisi. Klik Sync di menu Positions.';}catch{}}
+// BROKERS
+function openBrokerModal(){document.getElementById('broker-modal').classList.remove('hidden');renderBrokerFields();}
+function closeBrokerModal(){document.getElementById('broker-modal').classList.add('hidden');}
+function renderBrokerFields(){const t=document.getElementById('b-type').value;const c=document.getElementById('b-fields'); if(t==='bybit'){c.innerHTML=`<input id="b-api" class="input" placeholder="Bybit API Key" required><input id="b-sec" class="input" placeholder="Bybit Secret" required>`;} else {c.innerHTML=`<input id="b-token" class="input" placeholder="MetaApi Auth Token" required><input id="b-accid" class="input" placeholder="MetaApi Account ID" required>`;}}
+async function saveBroker(e){e.preventDefault();const t=document.getElementById('b-type').value, name=document.getElementById('b-name').value.trim(), is_testnet=document.getElementById('b-testnet').checked; let creds={}; if(t==='bybit') creds={api_key:document.getElementById('b-api').value.trim(), secret:document.getElementById('b-sec').value.trim()}; else creds={token:document.getElementById('b-token').value.trim(), account_id:document.getElementById('b-accid').value.trim()}; await api('/brokers',{method:'POST',body:JSON.stringify({broker_type:t,name,credentials:creds,is_testnet})}); closeBrokerModal(); loadBrokers(); loadAll();}
+async function loadBrokers(){const list=await api('/brokers');const el=document.getElementById('broker-list'); el.innerHTML=list.length? list.map(b=>`<div class="card p-4 flex justify-between items-center"><div><div class="font-semibold">${b.name}</div><div class="text-xs text-slate-500">${b.broker_type} • ${b.is_testnet?'Testnet':'Live'} • ${b.is_active?'Aktif':'Nonaktif'}</div></div><div class="flex gap-2"><button onclick="testOne('${b.id}')" class="btn btn-ghost text-xs">Test</button><button onclick="delBroker('${b.id}')" class="btn btn-ghost text-xs text-red-600">Hapus</button></div></div>`).join('') : '<div class="card p-8 text-center text-slate-400">Belum ada broker. Tambah Bybit / MT5 dulu.</div>';}
+async function delBroker(id){if(!confirm('Hapus broker?'))return;await api('/brokers/'+id,{method:'DELETE'});loadBrokers();}
+async function testBroker(){const t=document.getElementById('b-type').value;let creds={}; if(t==='bybit') creds={api_key:document.getElementById('b-api').value.trim(), secret:document.getElementById('b-sec').value.trim()}; else creds={token:document.getElementById('b-token')?.value||'', account_id:document.getElementById('b-accid')?.value||''}; try{const r=await fetch(API+'/api/brokers/test',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({broker_type:t,credentials:creds,is_testnet:document.getElementById('b-testnet').checked})}).then(x=>x.json());const el=document.getElementById('b-test-result');el.classList.remove('hidden');el.textContent=r.success?'✅ Koneksi OK':'❌ Gagal: '+(r.message||'');el.className=r.success?'text-sm px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 border':'text-sm px-3 py-2 rounded-lg bg-red-50 text-red-700 border';}catch(e){const el=document.getElementById('b-test-result');el.classList.remove('hidden');el.textContent='Error: '+e.message;}}
+async function testOne(id){const r=await api('/brokers/'+id+'/test',{method:'POST'});alert(r.success?'✅ Koneksi OK':'❌ Gagal: '+r.message);}
+// RULES
+function openRuleModal(){document.getElementById('rule-modal').classList.remove('hidden');conditions=[{indicator:'ema_cross',params:{fast:3,slow:8},operator:'cross_up',value:null}];renderSymbols();renderConditions();}
+function closeRuleModal(){document.getElementById('rule-modal').classList.add('hidden');}
+function renderSymbols(){const el=document.getElementById('r-symbols');el.innerHTML=SYMBOLS.map(s=>`<label class="text-xs bg-white border rounded-full px-3 py-1 cursor-pointer has-[:checked]:bg-blue-600 has-[:checked]:text-white has-[:checked]:border-blue-600"><input type="checkbox" value="${s}" class="sr-only r-sym"> ${s}</label>`).join('');}
+function addCondition(){conditions.push({indicator:'ema_cross',params:{fast:3,slow:8},operator:'cross_up',value:null});renderConditions();}
+function renderConditions(){const el=document.getElementById('r-conditions');el.innerHTML=conditions.map((c,i)=>{const ind=INDICATORS.find(x=>x.id===c.indicator);return `<div class="bg-white border rounded-xl p-3">
+  <div class="flex justify-between items-center mb-2"><select onchange="changeInd(${i},this.value)" class="input !w-auto text-sm font-semibold">${INDICATORS.map(x=>`<option value="${x.id}" ${x.id===c.indicator?'selected':''}>${x.label}</option>`).join('')}</select><button type="button" onclick="removeCond(${i})" class="text-slate-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button></div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">${ind.params.map(p=>`<label class="text-xs">${p.k}<input type="number" value="${c.params[p.k]??p.d}" onchange="changeParam(${i},'${p.k}',this.value)" class="input mt-1"></label>`).join('')}</div>
+  <div class="grid grid-cols-2 gap-2">
+    <label class="text-xs">Operator<select onchange="changeOp(${i},this.value)" class="input mt-1">${ind.ops.map(o=>`<option value="${o}" ${o===c.operator?'selected':''}>${OP_LABEL[o]||o}</option>`).join('')}</select></label>
+    <label class="text-xs ${['cross_up','cross_down','touch_upper','touch_lower','price_cross_above','price_cross_below'].includes(c.operator)?'opacity-40 pointer-events-none':''}">Value<input type="number" step="any" value="${c.value??''}" onchange="changeVal(${i},this.value)" class="input mt-1" placeholder="mis: 30 / 80 / -20"></label>
+  </div>
+</div>`}).join('');}
+function changeInd(i,v){const ind=INDICATORS.find(x=>x.id===v);conditions[i].indicator=v;conditions[i].params=Object.fromEntries(ind.params.map(p=>[p.k,p.d]));conditions[i].operator=ind.ops[0];conditions[i].value=ind.id==='rsi'?30: ind.id==='williams_r'?-80 : '';renderConditions();}
+function changeParam(i,k,v){conditions[i].params[k]=parseFloat(v);renderConditions();}
+function changeOp(i,v){conditions[i].operator=v;renderConditions();}
+function changeVal(i,v){conditions[i].value=v===''?null:parseFloat(v);}
+function removeCond(i){if(conditions.length===1) return;conditions.splice(i,1);renderConditions();}
+async function saveRule(e){e.preventDefault();const name=document.getElementById('r-name').value.trim(),logic=document.getElementById('r-logic').value,tf=document.getElementById('r-tf').value,tp=document.getElementById('r-tp').value,trail=parseFloat(document.getElementById('r-trail').value)||0;const syms=[...document.querySelectorAll('.r-sym:checked')].map(x=>x.value); if(!syms.length) return alert('Pilih minimal 1 symbol');if(!conditions.length) return alert('Tambah minimal 1 indikator');const conds=conditions.map(c=>({indicator:c.indicator,params:c.params,operator:c.operator,value:c.value}));await api('/rules',{method:'POST',body:JSON.stringify({name,logic_type:logic,timeframe:tf,symbols:syms,conditions:conds,tp_type:tp,trail_pct:trail})});closeRuleModal();loadRules();loadAll();}
+async function loadRules(){const list=await api('/rules');const el=document.getElementById('rule-list');el.innerHTML=list.length? list.map(r=>{let conds=[];try{conds=JSON.parse(r.conditions)}catch{} let syms=[];try{syms=JSON.parse(r.symbols)}catch{} return `<div class="card p-4"><div class="flex justify-between"><div><div class="font-semibold">${r.name}</div><div class="text-xs text-slate-500 mt-1"><span class="badge bg-blue-50 text-blue-700 border">${r.logic_type}</span> <span class="badge bg-slate-100">${r.timeframe}</span> <span class="badge bg-slate-100">${r.tp_type}</span> ${r.trail_pct?`<span class="badge bg-amber-50">trail ${r.trail_pct}%</span>`:''}</div><div class="text-xs text-slate-500 mt-1">Symbols: ${syms.join(', ')}</div><div class="text-xs text-slate-600 mt-1">${conds.map(c=>`<span class="inline-block bg-slate-50 border rounded px-2 py-0.5 mr-1 mb-1">${c.indicator} ${c.operator} ${c.value??''}</span>`).join('')}</div></div><button onclick="delRule('${r.id}')" class="btn btn-ghost text-red-600 self-start"><i class="fa-solid fa-trash"></i></button></div></div>`}).join('') : '<div class="card p-8 text-center text-slate-400">Belum ada rule. Buat rule: centang RSI / MA / Williams / BB, lalu attach ke posisi.</div>';}
+async function delRule(id){if(!confirm('Hapus rule?'))return;await api('/rules/'+id,{method:'DELETE'});loadRules();}
+// POSITIONS
+async function loadPositions(){const q=document.getElementById('pos-filter').value;const list=await api('/positions'+(q?'?status='+q:''));const rules=await api('/rules');const opts=rules.map(r=>{let s=[];try{s=JSON.parse(r.symbols)}catch{} return `<option value="${r.id}">${r.name} — ${s.join(',')} • ${r.timeframe}</option>`}).join('');document.getElementById('position-list').innerHTML=list.length? list.map(p=>`<div class="card p-4"><div class="flex justify-between items-start"><div><div class="font-mono font-bold">${p.symbol} <span class="badge ${p.side==='long'?'bg-emerald-50 text-emerald-700 border-emerald-200 border':'bg-red-50 text-red-700 border-red-200 border'}">${p.side.toUpperCase()}</span> <span class="badge bg-slate-100">${p.status}</span></div><div class="text-xs text-slate-500 mt-1">Entry ${p.entry_price} • Size ${p.size} • TP ${p.current_tp||'-'} • SL ${p.current_sl||'-'}</div>${p.rule_name?`<div class="text-xs mt-1"><span class="badge bg-blue-50 text-blue-700 border">Rule: ${p.rule_name}</span></div>`:''}</div><div class="text-xs text-slate-400">${(p.last_checked||'').slice(0,19)}</div></div><div class="mt-3 flex gap-2">${p.rule_id?`<button onclick="detachRule('${p.id}')" class="btn btn-ghost text-xs">Detach Rule</button>`: `<div class="flex gap-2 w-full"><select id="sel-${p.id}" class="input text-xs flex-1"><option value="">Pilih rule...</option>${opts}</select><button onclick="attachRule('${p.id}')" class="btn btn-primary text-xs">Attach</button></div>`}</div></div>`).join('') : '<div class="card p-8 text-center text-slate-400 col-span-full">Belum ada posisi. Buka posisi manual di broker, lalu klik Sync.</div>';}
+async function syncPositions(){const b=document.getElementById('btn-sync');b.innerHTML='<i class="fa-solid fa-spinner fa-spin mr-1"></i> Sync...';b.disabled=true;try{const r=await api('/positions/sync',{method:'POST'});await loadPositions();await loadAll();}finally{b.innerHTML='<i class="fa-solid fa-rotate mr-1"></i> Sync';b.disabled=false;}}
+async function attachRule(pid){const sel=document.getElementById('sel-'+pid);if(!sel.value) return alert('Pilih rule dulu');await api('/positions/'+pid+'/attach-rule',{method:'POST',body:JSON.stringify({rule_id:sel.value})});loadPositions();}
+async function detachRule(pid){await api('/positions/'+pid+'/detach-rule',{method:'POST'});loadPositions();}
+async function loadLogs(){const d=await api('/logs?limit=50');const el=document.getElementById('log-rows');const empty=document.getElementById('log-empty');if(!d.items.length){el.innerHTML='';empty.classList.remove('hidden');return;}empty.classList.add('hidden');el.innerHTML=d.items.map(l=>`<tr class="border-t"><td class="px-3 py-2 text-xs">${l.created_at.slice(0,19)}</td><td class="px-3 py-2 font-mono">${l.symbol||'-'}</td><td class="px-3 py-2">${l.tp_price}</td><td class="px-3 py-2"><span class="badge ${l.success?'bg-emerald-50 text-emerald-700 border':'bg-red-50 text-red-700 border'}">${l.success?'OK':'FAIL'}</span></td><td class="px-3 py-2 text-xs truncate max-w-[200px]">${l.trigger_condition||'-'}</td></tr>`).join('');}
+
+// single-user tanpa login langsung load + polling status Running
+async function pollStatus(){try{const s=await api('/status');const b=document.getElementById('worker-badge');if(b){b.innerHTML=`<span class="w-2 h-2 bg-emerald-500 rounded-full inline-block animate-pulse mr-1"></span>Running • ${s.monitoring} monitoring`;b.className='hidden sm:inline text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 rounded-full';}}catch{const b=document.getElementById('worker-badge');if(b){b.innerHTML=`<span class="w-2 h-2 bg-red-500 rounded-full inline-block mr-1"></span>Offline`;b.className='hidden sm:inline text-xs bg-red-50 text-red-700 border px-2 py-1 rounded-full';}} setTimeout(pollStatus,5000);}
+go('dashboard'); loadAll(); pollStatus();
+
+// === PWA: Service Worker + Install App ===
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').then(()=>console.log('SW registered')).catch(e=>console.log('SW fail',e));
+}
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const btn = document.getElementById('install-btn');
+  if (btn) btn.classList.remove('hidden');
+});
+async function installApp() {
+  if (!deferredPrompt) { alert('Browser lu ga support install, atau app sudah terinstall.'); return; }
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  if (outcome === 'accepted') { const btn = document.getElementById('install-btn'); if (btn) btn.classList.add('hidden'); }
+  deferredPrompt = null;
+}
+window.addEventListener('appinstalled', () => { const btn = document.getElementById('install-btn'); if (btn) btn.classList.add('hidden'); deferredPrompt = null; });
+</script>
+</body>
+</html>

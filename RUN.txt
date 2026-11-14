@@ -1,0 +1,26 @@
+TP Auto-Closer - Oracle Free Tier Bot
+=====================================
+
+Files:
+  bot.py         - main app (FastAPI + worker + SQLite)
+  index.html     - dashboard (HP/laptop)
+  .env.example   - config template
+  setup-oracle.sh - Oracle Cloud Shell one-paste installer
+
+Local test:
+  python bot.py
+  -> buka http://localhost:8000
+
+Oracle deploy:
+  1. Buka cloud.oracle.com -> Cloud Shell (icon >_ kanan atas)
+  2. Paste setup-oracle.sh (atau curl ... | bash)
+  3. nano ~/tp-closer/.env  (isi MetaApi token + account id)
+  4. sudo systemctl start tp-closer
+  5. cloudflared tunnel --url http://localhost:8000
+  6. Buka link https://xxx.trycloudflare.com di HP
+
+Env vars (lihat .env.example):
+  META_API_TOKEN, META_ACCOUNT_ID  (Exness/XM via MetaApi)
+  BYBIT_API_KEY, BYBIT_SECRET      (Bybit Testnet, opsional)
+  APP_PASSWORD                     (single-user password, kosong = no auth)
+  POLL_INTERVAL_SEC=15
